@@ -2,6 +2,8 @@
 PLAN: "refactor: backoff v0.2.0 (time.Duration delays)"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 18185206359011912867
 ---
 
 > Read AGENTS.md at the repo root before any change.
