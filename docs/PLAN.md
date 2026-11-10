@@ -2,8 +2,10 @@
 PLAN: "refactor: backoff v0.2.0 (time.Duration delays)"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 18185206359011912867
+PR: https://github.com/webtyp/externalcalls/pull/2
+REVIEWED_COMMIT: 4359657e71d25265062d5cb5f38e19547cab2ebf
 ---
 
 > Read AGENTS.md at the repo root before any change.
