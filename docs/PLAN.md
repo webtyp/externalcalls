@@ -3,6 +3,8 @@ PLAN: "feat: externalcalls — a durable queue of calls to other systems (stored
 TAG: v0.1.0
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 2275359581819232879
 ---
 
 > Read AGENTS.md at the repo root before any change.
