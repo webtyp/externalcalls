@@ -34,10 +34,15 @@ func (e queueError) Error() string { return string(e) }
 const (
 	ErrDependenciesRequired queueError = "externalcalls: the database, the id generator, the clock and a retry policy made with backoff.New are all required, so no queue was created and nothing was stored. Pass all four to externalcalls.New."
 	ErrTransactionRequired  queueError = "externalcalls: no transaction was given, so the call was not stored and the record is unaffected. Pass the transaction of the record (a crud.Tx) to Add."
-	ErrRequestFieldRequired queueError = "externalcalls: the request lacks TenantId, Module, Entity, RecordId or Call, so the call was not stored. Fill all five fields of externalcalls.Request."
-	ErrCallNotFound         queueError = "externalcalls: there is no queued call with that id, so nothing changed. Use the id that Add returned."
-	ErrCallNotQueued        queueError = "externalcalls: that call is already done or failed, so nothing changed. Only a queued call can be settled."
+	ErrRequestFieldRequired queueError = "externalcalls: the request lacks TenantId, Module, Entity, RecordId, Call or a valid Mode, so the call was not stored. Fill all six fields of externalcalls.Request."
+	ErrCallNotFound            queueError = "externalcalls: there is no queued call with that id, so nothing changed. Use the id that Add returned."
+	ErrCallNotQueued           queueError = "externalcalls: that call is already done or failed, so nothing changed. Only a queued call can be settled."
+	ErrNotAwaitingConfirmation queueError = "externalcalls: that call does not wait for a confirmation, or it is already done or failed, so nothing changed. Only a queued WaitForConfirmation call can be confirmed or rejected."
+	ErrRunnerRequired          queueError = "externalcalls: no runner was given, so no call was made and nothing changed. Pass the Runner that makes the calls to RunPendingCalls."
+	ErrRunLimitNotPositive     queueError = "externalcalls: the limit must be greater than zero, so no call was made and nothing changed. Pass how many due calls to run, for example 50."
 )
+
+const reasonUnknownCall = "externalcalls: the entity no longer declares this call, so it was marked failed without running"
 
 // Creator is what Add needs from the transaction of the record: crud.Tx satisfies it.
 type Creator interface {
@@ -46,13 +51,14 @@ type Creator interface {
 
 // Request says which call to queue and for which record.
 //
-//	externalcalls.Request{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge"}
+//	externalcalls.Request{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge", Mode: model.RetryInBackground}
 type Request struct {
 	TenantId string
 	Module   string
 	Entity   string
 	RecordId string
-	Call     string // the call's name as declared in the entity's ExternalCalls, e.g. "charge"
+	Call     string                 // the call's name as declared in the entity's ExternalCalls, e.g. "charge"
+	Mode     model.ExternalCallMode // how the call is run: WaitForReply, RetryInBackground or WaitForConfirmation
 }
 
 // Queue stores and settles queued calls.
@@ -84,7 +90,7 @@ func (q *Queue) Add(tx Creator, r Request) (string, error) {
 	if tx == nil {
 		return "", ErrTransactionRequired
 	}
-	if r.TenantId == "" || r.Module == "" || r.Entity == "" || r.RecordId == "" || r.Call == "" {
+	if r.TenantId == "" || r.Module == "" || r.Entity == "" || r.RecordId == "" || r.Call == "" || !validMode(r.Mode) {
 		return "", ErrRequestFieldRequired
 	}
 	now := q.now()
@@ -95,6 +101,7 @@ func (q *Queue) Add(tx Creator, r Request) (string, error) {
 		Entity:        r.Entity,
 		RecordId:      r.RecordId,
 		Call:          r.Call,
+		Mode:          int64(r.Mode),
 		State:         string(StateQueued),
 		NextAttemptAt: now,
 		CreatedAt:     now,
@@ -106,13 +113,18 @@ func (q *Queue) Add(tx Creator, r Request) (string, error) {
 	return row.Id, nil
 }
 
-// ListDue answers up to limit queued calls whose next attempt has arrived, the oldest first.
+func validMode(m model.ExternalCallMode) bool {
+	return m == model.WaitForReply || m == model.RetryInBackground || m == model.WaitForConfirmation
+}
+
+// ListDue answers up to limit queued RetryInBackground calls whose next attempt has arrived, the oldest first.
 //
 // Example: due, err := queue.ListDue(50)
 func (q *Queue) ListDue(limit int) ([]QueuedCall, error) {
 	row := &QueuedCall{}
 	query := q.db.Query(row).
 		Where(QueuedCall_.State).Eq(string(StateQueued)).
+		Where(QueuedCall_.Mode).Eq(int64(model.RetryInBackground)).
 		Where(QueuedCall_.NextAttemptAt).Lte(int64(q.now())).
 		OrderBy(QueuedCall_.NextAttemptAt).Asc().
 		Limit(limit)
@@ -135,10 +147,7 @@ func (q *Queue) MarkDone(id string) error {
 	if err != nil {
 		return err
 	}
-	row.State = string(StateDone)
-	row.LastError = ""
-	row.UpdatedAt = q.now()
-	return q.db.UpdateFields(row, []string{QueuedCall_.State, QueuedCall_.LastError, QueuedCall_.UpdatedAt}, orm.Eq(QueuedCall_.Id, row.Id))
+	return q.settle(row, StateDone, "")
 }
 
 // MarkFailedAttempt records one failed attempt of a queued call. A RetryInBackground call that has attempts left goes back
@@ -147,12 +156,18 @@ func (q *Queue) MarkDone(id string) error {
 //
 // Example: err := queue.MarkFailedAttempt(id, model.ExternalCallDefinition{Name: "receipt", Mode: model.RetryInBackground, MaxAttempts: 8}, "provider down")
 func (q *Queue) MarkFailedAttempt(id string, call model.ExternalCallDefinition, reason string) error {
+	_, err := q.failAttempt(id, call, reason)
+	return err
+}
+
+// failAttempt is MarkFailedAttempt and also answers the state the call ended in: queued (retry) or failed.
+func (q *Queue) failAttempt(id string, call model.ExternalCallDefinition, reason string) (State, error) {
 	if err := call.Validate(); err != nil {
-		return err
+		return "", err
 	}
 	row, err := q.queued(id)
 	if err != nil {
-		return err
+		return "", err
 	}
 	now := q.now()
 	row.Attempts++
@@ -162,12 +177,57 @@ func (q *Queue) MarkFailedAttempt(id string, call model.ExternalCallDefinition, 
 	if call.Mode == model.RetryInBackground && row.Attempts < call.MaxAttempts {
 		delay, delayErr := q.retry.DelayAfter(row.Attempts)
 		if delayErr != nil {
-			return delayErr
+			return "", delayErr
 		}
 		row.State = string(StateQueued)
 		row.NextAttemptAt = now.Add(delay)
 	}
-	return q.db.UpdateFields(row, []string{QueuedCall_.State, QueuedCall_.Attempts, QueuedCall_.NextAttemptAt, QueuedCall_.LastError, QueuedCall_.UpdatedAt}, orm.Eq(QueuedCall_.Id, row.Id))
+	err = q.db.UpdateFields(row, []string{QueuedCall_.State, QueuedCall_.Attempts, QueuedCall_.NextAttemptAt, QueuedCall_.LastError, QueuedCall_.UpdatedAt}, orm.Eq(QueuedCall_.Id, row.Id))
+	return State(row.State), err
+}
+
+// ConfirmCall settles a queued WaitForConfirmation call as done: the provider confirmed it. Whether the confirmation is
+// true is decided before (the module's Confirm rule asks the provider again): this only records the result.
+//
+// Example: err := queue.ConfirmCall(id)
+func (q *Queue) ConfirmCall(id string) error {
+	row, err := q.awaitingConfirmation(id)
+	if err != nil {
+		return err
+	}
+	return q.settle(row, StateDone, "")
+}
+
+// RejectCall settles a queued WaitForConfirmation call as failed: the provider refused it, or the module's Confirm rule
+// did not accept the confirmation. reason is stored in LastError.
+//
+// Example: err := queue.RejectCall(id, "card declined")
+func (q *Queue) RejectCall(id, reason string) error {
+	row, err := q.awaitingConfirmation(id)
+	if err != nil {
+		return err
+	}
+	return q.settle(row, StateFailed, reason)
+}
+
+// awaitingConfirmation reads a queued call and refuses one that does not wait for a confirmation.
+func (q *Queue) awaitingConfirmation(id string) (*QueuedCall, error) {
+	row, err := q.queued(id)
+	if err != nil {
+		return nil, err
+	}
+	if model.ExternalCallMode(row.Mode) != model.WaitForConfirmation {
+		return nil, ErrNotAwaitingConfirmation
+	}
+	return row, nil
+}
+
+// settle ends a queued call in state with reason as its last error.
+func (q *Queue) settle(row *QueuedCall, state State, reason string) error {
+	row.State = string(state)
+	row.LastError = reason
+	row.UpdatedAt = q.now()
+	return q.db.UpdateFields(row, []string{QueuedCall_.State, QueuedCall_.LastError, QueuedCall_.UpdatedAt}, orm.Eq(QueuedCall_.Id, row.Id))
 }
 
 // queued reads a call by id and refuses one that is not queued.

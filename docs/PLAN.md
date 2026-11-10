@@ -3,8 +3,10 @@ PLAN: "feat!: externalcalls runs the calls that wait in the background (RunPendi
 TAG: v0.2.0
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 5651496193766925125
+PR: https://github.com/webtyp/externalcalls/pull/3
+REVIEWED_COMMIT: 79a4da7dce30de6a83a9b3e0dbcb75dcafd61658
 ---
 
 > Read AGENTS.md at the repo root before any change.
