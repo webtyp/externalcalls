@@ -49,7 +49,16 @@ func newFixture(t *testing.T) *fixture {
 
 func (f *fixture) add(call string) string {
 	f.t.Helper()
-	id, err := f.queue.Add(creator{f.db}, externalcalls.Request{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: call})
+	id, err := f.queue.Add(creator{f.db}, externalcalls.Request{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: call, Mode: model.RetryInBackground})
+	if err != nil {
+		f.t.Fatalf("Add: %v", err)
+	}
+	return id
+}
+
+func (f *fixture) addMode(call string, mode model.ExternalCallMode) string {
+	f.t.Helper()
+	id, err := f.queue.Add(creator{f.db}, externalcalls.Request{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: call, Mode: mode})
 	if err != nil {
 		f.t.Fatalf("Add: %v", err)
 	}
@@ -69,7 +78,7 @@ func (f *fixture) row(id string) externalcalls.QueuedCall {
 func TestQueue_AddStoresAQueuedCall(t *testing.T) {
 	f := newFixture(t)
 	id, err := f.queue.Add(creator{f.db}, externalcalls.Request{
-		TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge",
+		TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge", Mode: model.RetryInBackground,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -93,16 +102,20 @@ func TestQueue_AddStoresAQueuedCall(t *testing.T) {
 	if id != row.Id {
 		t.Errorf("id mismatch: %q != %q", id, row.Id)
 	}
+	if row.Mode != int64(model.RetryInBackground) {
+		t.Errorf("got %d, want %d", row.Mode, model.RetryInBackground)
+	}
 }
 
 func TestQueue_AddRequiresEveryField(t *testing.T) {
 	f := newFixture(t)
 	reqs := []externalcalls.Request{
-		{Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge"},
-		{TenantId: "acme", Entity: "payment", RecordId: "pay-1", Call: "charge"},
-		{TenantId: "acme", Module: "payments", RecordId: "pay-1", Call: "charge"},
-		{TenantId: "acme", Module: "payments", Entity: "payment", Call: "charge"},
-		{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1"},
+		{Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge", Mode: model.RetryInBackground},
+		{TenantId: "acme", Entity: "payment", RecordId: "pay-1", Call: "charge", Mode: model.RetryInBackground},
+		{TenantId: "acme", Module: "payments", RecordId: "pay-1", Call: "charge", Mode: model.RetryInBackground},
+		{TenantId: "acme", Module: "payments", Entity: "payment", Call: "charge", Mode: model.RetryInBackground},
+		{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Mode: model.RetryInBackground},
+		{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge"},
 	}
 	for i, req := range reqs {
 		_, err := f.queue.Add(creator{f.db}, req)
@@ -121,7 +134,7 @@ func TestQueue_AddRequiresEveryField(t *testing.T) {
 
 func TestQueue_AddRequiresATransaction(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.queue.Add(nil, externalcalls.Request{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge"})
+	_, err := f.queue.Add(nil, externalcalls.Request{TenantId: "acme", Module: "payments", Entity: "payment", RecordId: "pay-1", Call: "charge", Mode: model.RetryInBackground})
 	if err != externalcalls.ErrTransactionRequired {
 		t.Errorf("got %v, want ErrTransactionRequired", err)
 	}

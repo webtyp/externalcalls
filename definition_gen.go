@@ -15,6 +15,7 @@ type QueuedCall struct {
 	Entity string
 	RecordId string
 	Call string
+	Mode int64
 	State string
 	Attempts int64
 	NextAttemptAt time.Nano
@@ -27,7 +28,7 @@ func (m *QueuedCall) ModelName() string { return "queued_call" }
 
 func (m *QueuedCall) Schema() []model.Field { return QueuedCallModel.Fields }
 
-func (m *QueuedCall) Pointers() []any { return []any{&m.Id, &m.TenantId, &m.Module, &m.Entity, &m.RecordId, &m.Call, &m.State, &m.Attempts, (*int64)(&m.NextAttemptAt), &m.LastError, (*int64)(&m.CreatedAt), (*int64)(&m.UpdatedAt)} }
+func (m *QueuedCall) Pointers() []any { return []any{&m.Id, &m.TenantId, &m.Module, &m.Entity, &m.RecordId, &m.Call, &m.Mode, &m.State, &m.Attempts, (*int64)(&m.NextAttemptAt), &m.LastError, (*int64)(&m.CreatedAt), (*int64)(&m.UpdatedAt)} }
 
 func (m *QueuedCall) IsNil() bool { return m == nil }
 
@@ -38,6 +39,7 @@ func (m *QueuedCall) EncodeFields(w model.FieldWriter) {
 	w.String("entity", m.Entity)
 	w.String("record_id", m.RecordId)
 	w.String("call", m.Call)
+	w.Int("mode", m.Mode)
 	w.String("state", m.State)
 	w.Int("attempts", m.Attempts)
 	w.Int("next_attempt_at", int64(m.NextAttemptAt))
@@ -53,6 +55,7 @@ func (m *QueuedCall) DecodeFields(r model.FieldReader) {
 	if v, ok := r.String("entity"); ok { m.Entity = v }
 	if v, ok := r.String("record_id"); ok { m.RecordId = v }
 	if v, ok := r.String("call"); ok { m.Call = v }
+	if v, ok := r.Int("mode"); ok { m.Mode = v }
 	if v, ok := r.String("state"); ok { m.State = v }
 	if v, ok := r.Int("attempts"); ok { m.Attempts = v }
 	if v, ok := r.Int("next_attempt_at"); ok { m.NextAttemptAt = time.Nano(v) }
@@ -84,6 +87,7 @@ var QueuedCall_ = struct {
 	Entity string
 	RecordId string
 	Call string
+	Mode string
 	State string
 	Attempts string
 	NextAttemptAt string
@@ -97,6 +101,7 @@ var QueuedCall_ = struct {
 	Entity: "entity",
 	RecordId: "record_id",
 	Call: "call",
+	Mode: "mode",
 	State: "state",
 	Attempts: "attempts",
 	NextAttemptAt: "next_attempt_at",

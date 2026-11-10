@@ -68,6 +68,7 @@ package main
 import (
 	"webtyp.com/externalcalls"
 	"webtyp.com/fmt"
+	"webtyp.com/model"
 )
 
 // creator implements externalcalls.Creator for this example
@@ -83,6 +84,7 @@ func main() {
 		Entity:   "payment",
 		RecordId: "pay-1",
 		Call:     "charge",
+		Mode:     model.RetryInBackground,
 	})
 	if err != nil {
 		fmt.Println(err)
@@ -123,6 +125,39 @@ func main() {
 }
 ```
 **Expected output:** `Done: <id>`
+
+### Step 4: Run the pending calls
+**Goal:** Run background calls automatically.
+
+```go
+package main
+
+import (
+	"webtyp.com/externalcalls"
+	"webtyp.com/fmt"
+	"webtyp.com/model"
+)
+
+type runner struct{}
+
+func (r runner) Declaration(module, entity, call string) (model.ExternalCallDefinition, bool) {
+	return model.ExternalCallDefinition{Name: call, Mode: model.RetryInBackground, MaxAttempts: 3}, true
+}
+
+func (r runner) Run(c externalcalls.QueuedCall, key string) error {
+	return nil
+}
+
+func main() {
+	var queue *externalcalls.Queue // assuming it is initialized and has pending calls
+	report, err := queue.RunPendingCalls(runner{}, 50)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("Done:", report.Done)
+}
+```
 
 ## Documentation Map
 

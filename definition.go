@@ -12,6 +12,7 @@ var QueuedCallModel = model.Definition{
 		{Name: "entity", Type: model.Text(), NotNull: true, DB: &model.FieldDB{}},
 		{Name: "record_id", Type: model.Text(), NotNull: true, DB: &model.FieldDB{}},
 		{Name: "call", Type: model.Text(), NotNull: true, DB: &model.FieldDB{}},
+		{Name: "mode", Type: model.Int(), NotNull: true, DB: &model.FieldDB{}},
 		{Name: "state", Type: model.Text(), NotNull: true, DB: &model.FieldDB{}},
 		{Name: "attempts", Type: model.Int(), NotNull: true, DB: &model.FieldDB{}},
 		{Name: "next_attempt_at", Type: model.NanoTime(), NotNull: true, DB: &model.FieldDB{}},
