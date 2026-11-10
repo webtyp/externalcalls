@@ -3,6 +3,8 @@ PLAN: "feat!: externalcalls runs the calls that wait in the background (RunPendi
 TAG: v0.2.0
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 5651496193766925125
 ---
 
 > Read AGENTS.md at the repo root before any change.
