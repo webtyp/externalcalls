@@ -15,5 +15,5 @@ flowchart TD
 2. It imports `model` for definitions.
 3. It imports `orm` for database interactions.
 4. It imports `time` for nanosecond precision time.
-5. It imports `backoff` for retry delays.
+5. It imports `backoff` for retry delays. It now also uses `time.Duration` for the retry delay.
 6. Nobody imports `externalcalls` yet, but `crud` will in the future via the `Creator` interface.
