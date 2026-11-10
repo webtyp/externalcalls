@@ -11,7 +11,7 @@ import (
 	"webtyp.com/time"
 )
 
-const second time.Nano = 1000000000
+const second = time.Second
 
 type fakeIDs struct{ n int }
 
@@ -230,22 +230,22 @@ func TestQueue_RetryInBackgroundWaitsThenFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	row := f.row(id)
-	if row.State != "queued" || row.Attempts != 1 || row.NextAttemptAt != 1000+second || row.LastError != "reason 1" {
+	if row.State != "queued" || row.Attempts != 1 || row.NextAttemptAt != time.Nano(1000).Add(second) || row.LastError != "reason 1" {
 		t.Errorf("fail 1: got %+v", row)
 	}
 
 	// failure 2
-	*f.clock = 1000 + second
+	*f.clock = time.Nano(1000).Add(second)
 	if err := f.queue.MarkFailedAttempt(id, call, "reason 2"); err != nil {
 		t.Fatal(err)
 	}
 	row = f.row(id)
-	if row.NextAttemptAt != *f.clock+2*second {
-		t.Errorf("fail 2: got %d, want %d", row.NextAttemptAt, *f.clock+2*second)
+	if row.NextAttemptAt != f.clock.Add(2 * second) {
+		t.Errorf("fail 2: got %d, want %d", row.NextAttemptAt, f.clock.Add(2 * second))
 	}
 
 	// failure 3
-	*f.clock = *f.clock + 2*second
+	*f.clock = f.clock.Add(2 * second)
 	if err := f.queue.MarkFailedAttempt(id, call, "reason 3"); err != nil {
 		t.Fatal(err)
 	}

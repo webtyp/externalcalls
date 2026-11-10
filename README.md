@@ -44,7 +44,7 @@ import (
 func main() {
 	db := orm.New(mem.New())
 	ids := model.NewIDGenerator()
-	policy, err := backoff.New(1000000000, 60000000000)
+	policy, err := backoff.New(time.Second, 60*time.Second)
 	if err != nil {
 		fmt.Println(err)
 		return

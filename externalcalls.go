@@ -165,7 +165,7 @@ func (q *Queue) MarkFailedAttempt(id string, call model.ExternalCallDefinition, 
 			return delayErr
 		}
 		row.State = string(StateQueued)
-		row.NextAttemptAt = now + delay
+		row.NextAttemptAt = now.Add(delay)
 	}
 	return q.db.UpdateFields(row, []string{QueuedCall_.State, QueuedCall_.Attempts, QueuedCall_.NextAttemptAt, QueuedCall_.LastError, QueuedCall_.UpdatedAt}, orm.Eq(QueuedCall_.Id, row.Id))
 }
