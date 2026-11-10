@@ -3,8 +3,10 @@ PLAN: "feat: externalcalls — a durable queue of calls to other systems (stored
 TAG: v0.1.0
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 2275359581819232879
+PR: https://github.com/webtyp/externalcalls/pull/1
+REVIEWED_COMMIT: 7196fada7489318abb84c3dfaabb4250a688efff
 ---
 
 > Read AGENTS.md at the repo root before any change.
